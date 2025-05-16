@@ -68,6 +68,22 @@ class PGAgent(nn.Module):
         # way. obs, actions, rewards, terminals, and q_values should all be arrays with a leading dimension of `batch_size`
         # beyond this point.
 
+        # Sequence[np.array] 형태에서 2차원 np.array 형태로 변환
+        '''
+        obs = np.stack(obs)
+        action = np.stack(action)
+        rewards = np.stack(rewards)
+        terminals = np.stack(terminals)
+        q_values = np.stack(q_values)
+        '''
+        N = len(q_values)
+
+        obs = np.concatenate(obs, axis=0)
+        actions = np.concatenate(actions, axis=0)
+        rewards = np.concatenate(rewards, axis=0)
+        terminals = np.concatenate(terminals, axis=0)
+        q_values = np.concatenate(q_values, axis=0)
+
         # step 2: calculate advantages from Q values
         advantages: np.ndarray = self._estimate_advantage(
             obs, rewards, q_values, terminals
@@ -75,10 +91,10 @@ class PGAgent(nn.Module):
 
         # step 3: use all datapoints (s_t, a_t, adv_t) to update the PG actor/policy
         # TODO: update the PG actor/policy network once using the advantages
-        info: dict = None
+        info: dict = self.actor.update(obs, actions, advantages, N)
 
         # step 4: if needed, use all datapoints (s_t, a_t, q_t) to update the PG critic/baseline
-        if self.critic is not None:
+        if self.critic is not None: # baseline 사용 시
             # TODO: perform `self.baseline_gradient_steps` updates to the critic/baseline network
             critic_info: dict = None
 
@@ -94,12 +110,19 @@ class PGAgent(nn.Module):
             # trajectory at each point.
             # In other words: Q(s_t, a_t) = sum_{t'=0}^T gamma^t' r_{t'}
             # TODO: use the helper function self._discounted_return to calculate the Q-values
-            q_values = None
+            q_values = []
+            for trajec_reward in rewards :
+                q_value = np.zeros_like(trajec_reward)
+                q_value.fill(self._discounted_return(trajec_reward.tolist()))
+                q_values.append(q_value)
         else:
             # Case 2: in reward-to-go PG, we only use the rewards after timestep t to estimate the Q-value for (s_t, a_t).
             # In other words: Q(s_t, a_t) = sum_{t'=t}^T gamma^(t'-t) * r_{t'}
             # TODO: use the helper function self._discounted_reward_to_go to calculate the Q-values
-            q_values = None
+            q_values = []
+            for trajec_reward in rewards :
+                q_value = self._discounted_reward_to_go(trajec_reward.tolist())
+                q_values.append(np.array(q_value))
 
         return q_values
 
@@ -116,7 +139,7 @@ class PGAgent(nn.Module):
         """
         if self.critic is None:
             # TODO: if no baseline, then what are the advantages?
-            advantages = None
+            advantages = q_values
         else:
             # TODO: run the critic and use it as a baseline
             values = None
@@ -143,8 +166,11 @@ class PGAgent(nn.Module):
                 advantages = advantages[:-1]
 
         # TODO: normalize the advantages to have a mean of zero and a standard deviation of one within the batch
+        # 전체 batch 단위로 정규화.
         if self.normalize_advantages:
-            pass
+            mean = np.mean(advantages)
+            std = np.std(advantages) + 1e-8
+            advantages = (advantages-mean)/std
 
         return advantages
 
@@ -156,7 +182,15 @@ class PGAgent(nn.Module):
         Note that all entries of the output list should be the exact same because each sum is from 0 to T (and doesn't
         involve t)!
         """
-        return None
+        # 할인된 return 반환
+        # 0부터 T-1까지의 할인된 리턴
+        # self.gamma
+        sum = 0
+        discount = 1
+        for reward in rewards :
+            sum += reward*discount
+            discount *= self.gamma
+        return sum
 
 
     def _discounted_reward_to_go(self, rewards: Sequence[float]) -> Sequence[float]:
@@ -164,4 +198,9 @@ class PGAgent(nn.Module):
         Helper function which takes a list of rewards {r_0, r_1, ..., r_t', ... r_T} and returns a list where the entry
         in each index t' is sum_{t'=t}^T gamma^(t'-t) * r_{t'}.
         """
-        return None
+        sum_list = []        
+        sum = 0
+        for reward in rewards[::-1] :
+            sum = sum*self.gamma + reward
+            sum_list.insert(0, sum)
+        return sum_list

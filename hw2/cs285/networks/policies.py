@@ -71,11 +71,26 @@ class MLPPolicy(nn.Module):
         """
         if self.discrete:
             # TODO: define the forward pass for a policy with a discrete action space.
-            pass
+            logits = self.logits_net(obs)
+            logits = torch.softmax(logits, dim = -1)
+
+            # softmax로 추출한 확률값으로부터 랜덤하게 추출
+            #dist = torch.distributions.Categorical(probs=logits)
+            #acs = dist.sample()
+
+            # 가장 큰 값 추출
+            acs = torch.argmax(logits)
+            
+            # 이론상 가장 큰 값을 추출해도 정상적으로 학습은 이루어져야됨(안좋은 reward에 대해 패널티를 주기 때문)
+            # 하지만, baseline이 없는 버전에서 nomalize를 하지 않으면 나쁜 결과에도 reward 부여
+            # 결과적으로 좋지 않은 선택이지만 선택 확률이 증가하는 모순 발생
+            # 하지만 랜덤으로 선택 시 우연히 좋은 선택 수행하면, 해당 행동 선택 확률 증가.
+            # 좋은 선택을 더 많이 선택하도록 유도.
+            # baseline이 없는 버전에서도 학습에 따라 결과가 좋아지게 됨.
         else:
             # TODO: define the forward pass for a policy with a continuous action space.
-            pass
-        return None
+            acs = self.mean_net(obs)
+        return acs
 
     def update(self, obs: np.ndarray, actions: np.ndarray, *args, **kwargs) -> dict:
         """Performs one iteration of gradient descent on the provided batch of data."""
@@ -90,6 +105,7 @@ class MLPPolicyPG(MLPPolicy):
         obs: np.ndarray,
         actions: np.ndarray,
         advantages: np.ndarray,
+        N : int
     ) -> dict:
         """Implements the policy gradient actor update."""
         obs = ptu.from_numpy(obs)
@@ -97,7 +113,26 @@ class MLPPolicyPG(MLPPolicy):
         advantages = ptu.from_numpy(advantages)
 
         # TODO: implement the policy gradient actor update.
-        loss = None
+        self.optimizer.zero_grad()
+        if self.discrete :
+            '''
+            logits = self.logits_net(obs)
+            actions = F.one_hot(actions.long(), num_classes = len(logits[0])).float()
+            actions *= advantages.unsqueeze(-1)
+            #loss = torch.nn.functional.cross_entropy(logits, actions)
+            log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
+            action_log_probs = torch.sum(log_probs * actions, dim=-1)
+            loss = -torch.mean(action_log_probs)
+            '''
+            logits = self.logits_net(obs)
+            log_probs = torch.nn.functional.cross_entropy(logits, actions.long().squeeze(), reduction='none')
+            loss = torch.sum(log_probs * advantages) / N
+        else :
+            logits = self.mean_net(obs)
+            loss = -torch.mean(torch.log(logits)*advantages)
+
+        loss.backward()
+        self.optimizer.step()
 
         return {
             "Actor Loss": ptu.to_numpy(loss),

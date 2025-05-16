@@ -27,7 +27,9 @@ def run_training_loop(args):
     ptu.init_gpu(use_gpu=not args.no_gpu, gpu_id=args.which_gpu)
 
     # make the gym environment
-    env = gym.make(args.env_name, render_mode=None)
+    env = gym.make(args.env_name, render_mode='rgb_array')
+    # env.action_space가 gym.spaces.Discrete의 인스턴스인지 여부 확인
+    # isinstance(instance, class)
     discrete = isinstance(env.action_space, gym.spaces.Discrete)
 
     # add action noise, if needed
@@ -70,19 +72,27 @@ def run_training_loop(args):
         print(f"\n********** Iteration {itr} ************")
         # TODO: sample `args.batch_size` transitions using utils.sample_trajectories
         # make sure to use `max_ep_len`
-        trajs, envsteps_this_batch = None, None  # TODO
+        # 학습에 사용할 경로 샘플링
+        trajs, envsteps_this_batch = utils.sample_trajectories(
+                env, agent.actor, args.batch_size, max_ep_len)  
         total_envsteps += envsteps_this_batch
 
         # trajs should be a list of dictionaries of NumPy arrays, where each dictionary corresponds to a trajectory.
         # this line converts this into a single dictionary of lists of NumPy arrays.
+        # trajs는 여러개의 dictionary로 구성되어 있다.
+        # 이를 키 별로 구분해서 하나로 합쳐주는 작업.
         trajs_dict = {k: [traj[k] for traj in trajs] for k in trajs[0]}
 
         # TODO: train the agent using the sampled trajectories and the agent's update function
-        train_info: dict = None
+        # 학습?
+        train_info: dict = agent.update(
+            trajs_dict['observation'], trajs_dict['action'], trajs_dict['reward'], trajs_dict['terminal'])
 
         if itr % args.scalar_log_freq == 0:
             # save eval metrics
             print("\nCollecting data for eval...")
+            # 일정 간격으로 학습 정도를 확인하기 위해 데이터 수집.
+            # 그니까 학습 전이랑 학습 후의 성능 비교
             eval_trajs, eval_envsteps_this_batch = utils.sample_trajectories(
                 env, agent.actor, args.eval_batch_size, max_ep_len
             )
