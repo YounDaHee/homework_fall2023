@@ -34,9 +34,10 @@ def sample_trajectory(
 
         # TODO use the most recent ob and the policy to decide what to do
         # 현 상태에서의 다음 행동 추론
-        ob_ = torch.from_numpy(ob).float().to(ptu.device)
+        #ob_ = torch.from_numpy(ob).float().to(ptu.device)
         # 역전파 대상에서 제외... 이게 맞나?
-        ac: np.ndarray = policy.forward(ob_).detach().cpu().numpy().squeeze() 
+        #ac: np.ndarray = policy.forward(ob_).detach().cpu().numpy().squeeze() 
+        ac: np.ndarray = policy.get_action(ob)
 
         # TODO: use that action to take a step in the environment
         next_ob, rew, done, _, _ = env.step(ac)

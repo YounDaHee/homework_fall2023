@@ -96,9 +96,11 @@ class PGAgent(nn.Module):
         # step 4: if needed, use all datapoints (s_t, a_t, q_t) to update the PG critic/baseline
         if self.critic is not None: # baseline 사용 시
             # TODO: perform `self.baseline_gradient_steps` updates to the critic/baseline network
-            critic_info: dict = None
+           critic_info = {}
+           for n in range(self.baseline_gradient_steps):
+                critic_info = self.critic.update(obs, q_values)
 
-            info.update(critic_info)
+           info.update(critic_info)
 
         return info
 
@@ -142,12 +144,15 @@ class PGAgent(nn.Module):
             advantages = q_values
         else:
             # TODO: run the critic and use it as a baseline
-            values = None
+            # values function 구현
+            obs_ = ptu.from_numpy(obs)
+            values = ptu.to_numpy(self.critic(obs_)).squeeze(-1)
             assert values.shape == q_values.shape
 
             if self.gae_lambda is None:
                 # TODO: if using a baseline, but not GAE, what are the advantages?
-                advantages = None
+                # advantages = Q - V
+                advantages = q_values - values
             else:
                 # TODO: implement GAE
                 batch_size = obs.shape[0]
@@ -160,8 +165,9 @@ class PGAgent(nn.Module):
                     # TODO: recursively compute advantage estimates starting from timestep T.
                     # HINT: use terminals to handle edge cases. terminals[i] is 1 if the state is the last in its
                     # trajectory, and 0 otherwise.
-                    pass
-
+                    delta = rewards[i] + self.gamma*values[i+1]*(not terminals[i])-values[i]
+                    advantages[i] = delta + self.gamma*self.gae_lambda*advantages[i+1]*(not terminals[i])
+                    
                 # remove dummy advantage
                 advantages = advantages[:-1]
 
@@ -198,6 +204,7 @@ class PGAgent(nn.Module):
         Helper function which takes a list of rewards {r_0, r_1, ..., r_t', ... r_T} and returns a list where the entry
         in each index t' is sum_{t'=t}^T gamma^(t'-t) * r_{t'}.
         """
+        
         sum_list = []        
         sum = 0
         for reward in rewards[::-1] :
