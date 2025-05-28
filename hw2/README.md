@@ -134,6 +134,9 @@ black line은 람다가 0, blue line은 람다가 0.95, pink line은 람다가 0
 Inverted Pendulum을 이용하여 실험을 진행하였다.
 강화 학습은 운의 영향을 많이 받는다.
 sampling 시에 어떠한 데이터를 수집하는지에 따라 학습 속도가 달라질 수 있다.
-파라미터로 인한 개선을 명확히 확인하기 위해 random seed를 변경하며 얻은 결과의 평균을 확인하였다.
+파라미터로 인한 개선을 명확히 확인하기 위해 random seed를 변경하며 얻은 결과의 평균을 확인하였다.`
+edit에선 discount 옵션과 gae_lamda 옵션을 다음과 같이 설정했다
+
+`--discount 0.98 --gae_lambda 0.99`
 
 ![Image](https://github.com/user-attachments/assets/9eb7a570-15a1-4b79-a282-5ef15c70645d)
